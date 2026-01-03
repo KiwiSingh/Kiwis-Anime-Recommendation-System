@@ -1077,9 +1077,13 @@ def main():
                                 u_resp = requests.get(f"{KITSU_REST_URL}/users?filter[name]={user}")
                             
                             if u_resp.status_code == 200 and u_resp.json().get('data'):
-                                u_id = u_resp.json()['data'][0]['id']
+                                user_data = u_resp.json()['data'][0]
+                                u_id = user_data['id']
+                                u_slug = user_data['attributes'].get('slug')
+                                st.info(f"📍 Accessing Kitsu Profile: **{u_slug}** (ID: {u_id})")
+                                
                                 # Filter for completed entries and sort by most recent
-                                url = f"{KITSU_REST_URL}/library-entries?filter[user_id]={u_id}&filter[kind]=anime&filter[status]=completed&include=anime,anime.categories&page[limit]=100&sort=-updated_at"
+                                url = f"{KITSU_REST_URL}/library-entries?filter[userId]={u_id}&filter[kind]=anime&filter[status]=completed&include=anime,anime.categories&page[limit]=100&sort=-updated_at"
                                 resp = requests.get(url).json()
                                 inc = {f"{i['type']}_{i['id']}": i for i in resp.get('included', [])}
                                 st.session_state.current_list = []
@@ -1098,7 +1102,12 @@ def main():
                                         st.session_state.current_list.append(e)
                                 
                                 st.session_state.provider_display_name = method
-                                st.success(f"Loaded {len(st.session_state.current_list)} anime!")
+                                if st.session_state.current_list:
+                                    titles = [e['media_details']['attributes'].get('canonicalTitle') for e in st.session_state.current_list[:5]]
+                                    st.success(f"✅ Loaded {len(st.session_state.current_list)} completed anime!")
+                                    st.write("📚 **Sample from your list:** " + ", ".join(titles))
+                                else:
+                                    st.warning("⚠️ Successfully connected but found 0 completed anime in your library.")
                             else:
                                 st.error("User not found!")
                     except Exception as e:
