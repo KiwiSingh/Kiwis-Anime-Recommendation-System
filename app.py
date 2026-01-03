@@ -14,7 +14,7 @@ import secrets
 import re
 from collections import Counter
 import logging
-import streamlit.components.v1 as components
+import streamlit.components.v1 as components # type: ignore
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -47,9 +47,14 @@ init_session_state()
 # API Constants
 MAL_CLIENT_ID = st.secrets.get("MAL_CLIENT_ID", "")
 MAL_CLIENT_SECRET = st.secrets.get("MAL_CLIENT_SECRET", "")
-REDIRECT_URI = "https://kiwi-anime-recs.streamlit.app/?popup=true"
+REDIRECT_URI = "https://kiwi-anime-recs.streamlit.app/"
 KITSU_REST_URL = "https://kitsu.io/api/edge"
 ANILIST_URL = "https://graphql.anilist.co"
+
+# Default headers for API requests
+DEFAULT_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+}
 
 # Handle popup callback
 if 'popup' in st.query_params:
@@ -671,16 +676,31 @@ def handle_mal_callback():
                 'grant_type': 'authorization_code',
                 'redirect_uri': REDIRECT_URI
             }
-            resp = requests.post("https://myanimelist.net/v1/oauth2/token", data=token_data)
+            # Make token request with proper headers and timeout
+            resp = requests.post(
+                "https://myanimelist.net/v1/oauth2/token",
+                data=token_data,
+                headers=DEFAULT_HEADERS,
+                timeout=10,
+                verify=True
+            )
             if resp.status_code == 200:
                 st.session_state.mal_authenticated = True
                 st.session_state.oauth_session = OAuth2Session(MAL_CLIENT_ID, token=resp.json())
                 st.query_params.clear()
                 st.rerun()
             else:
-                st.error(f"❌ Auth Failed: {resp.text}")
+                logger.error(f"Token exchange failed: {resp.status_code} - {resp.text}")
+                st.error(f"❌ Auth Failed: {resp.status_code}")
+        except requests.exceptions.Timeout:
+            logger.error("Token request timeout")
+            st.error("❌ Connection timeout. Please try again.")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error: {str(e)}")
+            st.error("❌ Connection error. Please check your internet connection.")
         except Exception as e:
-            st.error(f"❌ Connection Error: {str(e)}")
+            logger.error(f"Unexpected error in token exchange: {str(e)}")
+            st.error(f"❌ Error: {str(e)}")
 
 # Initialize provider selection
 query_params = st.query_params.to_dict()
@@ -955,14 +975,25 @@ def main():
             if st.session_state.mal_authenticated:
                 if st.button("📥 Load MAL Data"):
                     with st.spinner("Loading your anime list..."):
-                        resp = st.session_state.oauth_session.get(
-                            "https://api.myanimelist.net/v2/users/@me/animelist",
-                            params={'limit': 150, 'fields': 'list_status,title', 'status': 'completed'}
-                        )
-                        if resp.status_code == 200:
-                            st.session_state.current_list = resp.json().get('data', [])
-                            st.session_state.provider_display_name = "MAL"
-                            st.success(f"Loaded {len(st.session_state.current_list)} anime!")
+                        try:
+                            resp = st.session_state.oauth_session.get(
+                                "https://api.myanimelist.net/v2/users/@me/animelist",
+                                params={'limit': 150, 'fields': 'list_status,title', 'status': 'completed'},
+                                headers=DEFAULT_HEADERS,
+                                timeout=10
+                            )
+                            if resp.status_code == 200:
+                                st.session_state.current_list = resp.json().get('data', [])
+                                st.session_state.provider_display_name = "MAL"
+                                st.success(f"Loaded {len(st.session_state.current_list)} anime!")
+                            else:
+                                logger.error(f"Failed to load MAL data: {resp.status_code}")
+                                st.error(f"Failed to load data. Status: {resp.status_code}")
+                        except requests.exceptions.Timeout:
+                            st.error("❌ Request timeout. Please try again.")
+                        except Exception as e:
+                            logger.error(f"Error loading MAL data: {str(e)}")
+                            st.error(f"❌ Error loading data: {str(e)}")
             else:
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
