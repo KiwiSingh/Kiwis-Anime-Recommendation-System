@@ -980,7 +980,7 @@ def main():
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
                 st.markdown(f"""
-                    <a href="{url}" target="_self" style="text-decoration:none;">
+                    <a href="{url}" target="_top" style="text-decoration:none;">
                         <div style="background:#2e51a2;color:white;padding:12px;border-radius:4px;text-align:center;font-weight:bold;font-size:16px;width:100%;">
                             🔐 Login with MyAnimeList
                         </div>
