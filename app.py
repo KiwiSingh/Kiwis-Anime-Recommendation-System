@@ -980,26 +980,16 @@ def main():
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
                 
-                # Simplified styled link with target="_top" for same-window redirect
-                st.markdown(f"""
-                    <a href="{url}" target="_top" style="
-                        background-color: #2e51a2;
-                        color: white !important;
-                        padding: 12px 20px;
-                        text-align: center;
-                        text-decoration: none;
-                        display: block;
-                        border-radius: 4px;
-                        font-weight: bold;
-                        font-size: 16px;
-                        margin-bottom: 10px;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    ">
-                        🔐 Login with MyAnimeList
-                    </a>
-                """, unsafe_allow_html=True)
+                st.subheader("🔐 MAL Login")
+                st.info("Follow these steps to connect your account:")
+                st.markdown("""
+                1. Click the button below
+                2. Authorize the app on MAL
+                3. You will be returned here!
+                """)
                 
-                st.caption("This will redirect your current tab to MyAnimeList for authorization.")
+                st.link_button("🔐 Start MAL Authorization", url, type="primary", use_container_width=True)
+                st.caption("Note: This will open a redirection flow in your current tab or a new window.")
 
         elif method == "NLP / Mood Search":
             vibe = st.text_area(
