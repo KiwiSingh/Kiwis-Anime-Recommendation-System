@@ -57,25 +57,30 @@ DEFAULT_HEADERS = {
 }
 
 # Handle OAuth callback from popup - use JavaScript to redirect parent
-if 'code' in st.query_params and 'state' in st.query_params:
+if 'code' in st.query_params and 'state' in st.query_params and 'auth_done' not in st.query_params:
     code = st.query_params['code']
     state = st.query_params.get('state', '')
     
     # Always use JavaScript to handle popup redirect
     components.html(f"""
     <script>
-    // If this is a popup, redirect parent and close
+    const parentUrl = window.location.origin + window.location.pathname + '?code={code}&state={state}&auth_done=true';
     if (window.opener && window.opener !== window) {{
-        const parentUrl = window.location.origin + window.location.pathname + '?code={code}&state={state}';
+        // If this is a popup, redirect parent and close
         try {{
             window.opener.location.href = parentUrl;
+            window.close();
         }} catch(e) {{
             console.error('Cannot access parent:', e);
+            window.location.href = parentUrl;
         }}
-        setTimeout(() => window.close(), 500);
+    }} else {{
+        // If not in a popup, redirect ourselves to the auth_done URL
+        window.location.href = parentUrl;
     }}
     </script>
     """, height=0)
+    st.stop()
 
 # --- SPECIAL ANIME COLLECTIONS ---
 ICONIC_COLLECTIONS = {
