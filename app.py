@@ -36,7 +36,8 @@ def init_session_state():
         'provider_display_name': "",
         'nlp_vibe': "",
         'mal_authenticated': False,
-        'selected_provider': None
+        'selected_provider': None,
+        'kitsu_candidates': []
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1048,8 +1049,8 @@ def main():
             if method == "Anilist":
                 user = st.text_input(f"{method} Username")
             elif method == "Kitsu":
-                user = st.text_input("👤 Enter Kitsu Username (Slug)", placeholder="e.g. kuro_neko")
-                st.caption("Your username is the one found in your Kitsu profile URL.")
+                user = st.text_input("👤 Enter Kitsu Username or ID", placeholder="e.g. kuro_neko or 12345")
+                st.caption("Tip: Use your numerical ID for 100% accuracy.")
 
             if user and st.button("📥 Load"):
                 with st.spinner(f"Loading {method} data..."):
@@ -1071,13 +1072,32 @@ def main():
                             else:
                                 st.error("User not found or no anime list!")
                         elif method == "Kitsu":
-                            # Robust user lookup: try slug first, then fallback to name
-                            u_resp = requests.get(f"{KITSU_REST_URL}/users?filter[slug]={user}")
-                            if not (u_resp.status_code == 200 and u_resp.json().get('data')):
-                                u_resp = requests.get(f"{KITSU_REST_URL}/users?filter[name]={user}")
+                            candidates = []
+                            # 1. Try numerical ID
+                            if user.isdigit():
+                                try:
+                                    u_resp = requests.get(f"{KITSU_REST_URL}/users/{user}")
+                                    if u_resp.status_code == 200 and u_resp.json().get('data'):
+                                        candidates = [u_resp.json()['data']]
+                                except: pass
                             
-                            if u_resp.status_code == 200 and u_resp.json().get('data'):
-                                user_data = u_resp.json()['data'][0]
+                            # 2. Try slug if no ID found
+                            if not candidates:
+                                u_resp = requests.get(f"{KITSU_REST_URL}/users?filter[slug]={user}")
+                                if u_resp.status_code == 200 and u_resp.json().get('data'):
+                                    candidates = u_resp.json()['data']
+                            
+                            # 3. Try name if no slug found
+                            if not candidates:
+                                u_resp = requests.get(f"{KITSU_REST_URL}/users?filter[name]={user}")
+                                if u_resp.status_code == 200 and u_resp.json().get('data'):
+                                    candidates = u_resp.json()['data']
+                            
+                            if len(candidates) > 1:
+                                st.session_state.kitsu_candidates = candidates
+                                st.warning(f"Found {len(candidates)} profiles. Please select yours from the list below.")
+                            elif len(candidates) == 1:
+                                user_data = candidates[0]
                                 u_id = user_data['id']
                                 u_slug = user_data['attributes'].get('slug')
                                 st.info(f"📍 Accessing Kitsu Profile: **{u_slug}** (ID: {u_id})")
@@ -1113,6 +1133,37 @@ def main():
                     except Exception as e:
                         st.error(f"Error loading data: {str(e)}")
                         logger.error(f"Load error: {str(e)}")
+                                
+                # Selection UI for Kitsu candidates (outside the 'Load' button block)
+                if st.session_state.get('kitsu_candidates'):
+                    options = {f"{c['attributes'].get('slug')} (ID: {c['id']})": c for i, c in enumerate(st.session_state.kitsu_candidates)}
+                    selected_label = st.selectbox("Select your profile:", list(options.keys()))
+                    if st.button("✅ Confirm & Load Selected Profile"):
+                        selected_user = options[selected_label]
+                        st.session_state.kitsu_candidates = [] # clear
+                        u_id = selected_user['id']
+                        with st.spinner("Finalizing load..."):
+                            try:
+                                url = f"{KITSU_REST_URL}/library-entries?filter[userId]={u_id}&filter[kind]=anime&filter[status]=completed&include=anime,anime.categories&page[limit]=100&sort=-updated_at"
+                                resp = requests.get(url).json()
+                                inc = {f"{i['type']}_{i['id']}": i for i in resp.get('included', [])}
+                                st.session_state.current_list = []
+                                for e in resp.get('data', []):
+                                    ref = e['relationships']['anime']['data']
+                                    if f"anime_{ref['id']}" in inc:
+                                        media = inc[f"anime_{ref['id']}"]
+                                        e['media_details'] = media
+                                        c_refs = media['relationships']['categories']['data']
+                                        e['genres_list'] = [
+                                            inc[f"categories_{c['id']}"]['attributes']['title']
+                                            for c in c_refs
+                                            if f"categories_{c['id']}" in inc
+                                        ]
+                                        st.session_state.current_list.append(e)
+                                st.session_state.provider_display_name = method
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Finalize error: {str(e)}")
 
     st.title("🥝 Kiwi's Anime Recommendation System")
     st.markdown("*Your AI-powered anime recommendation engine*")
