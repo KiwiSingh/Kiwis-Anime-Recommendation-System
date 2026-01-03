@@ -12,6 +12,9 @@ A sophisticated anime recommendation system built with Streamlit that leverages 
 - **Visual Analytics**: Interactive charts and graphs using Plotly
 - **Smart Filtering**: Advanced filtering based on genres, ratings, and user preferences
 
+## Deployments
+You can find this app [on Streamlit.](https://kiwi-anime-recs.streamlit.app/)
+
 ## Installation
 
 1. Clone this repository:
