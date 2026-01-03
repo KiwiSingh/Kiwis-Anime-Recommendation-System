@@ -62,9 +62,10 @@ if 'code' in st.query_params and 'state' in st.query_params and 'auth_done' not 
     state = st.query_params.get('state', '')
     
     # Always use JavaScript to handle popup redirect
+    # We use the hardcoded REDIRECT_URI because window.location.origin inside an iframe is restricted
     components.html(f"""
     <script>
-    const parentUrl = window.location.origin + window.location.pathname + '?code={code}&state={state}&auth_done=true';
+    const parentUrl = "{REDIRECT_URI}?code={code}&state={state}&auth_done=true";
     if (window.opener && window.opener !== window) {{
         // If this is a popup, redirect parent and close
         try {{
@@ -72,11 +73,11 @@ if 'code' in st.query_params and 'state' in st.query_params and 'auth_done' not 
             window.close();
         }} catch(e) {{
             console.error('Cannot access parent:', e);
-            window.location.href = parentUrl;
+            window.top.location.href = parentUrl;
         }}
     }} else {{
-        // If not in a popup, redirect ourselves to the auth_done URL
-        window.location.href = parentUrl;
+        // If not in a popup, redirect the top-level window
+        window.top.location.href = parentUrl;
     }}
     </script>
     """, height=0)
