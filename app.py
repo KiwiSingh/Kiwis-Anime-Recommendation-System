@@ -36,8 +36,7 @@ def init_session_state():
         'provider_display_name': "",
         'nlp_vibe': "",
         'mal_authenticated': False,
-        'selected_provider': None,
-        'trigger_mal_auth': False
+        'selected_provider': None
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -981,20 +980,26 @@ def main():
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
                 
-                if st.button("🔐 Login with MyAnimeList", type="primary", use_container_width=True):
-                    st.session_state.trigger_mal_auth = True
-                    st.rerun()
-
-                if st.session_state.get('trigger_mal_auth'):
-                    st.session_state.trigger_mal_auth = False
-                    components.html(f"""
-                        <script>
-                            window.top.location.href = "{url}";
-                        </script>
-                    """, height=0)
-                    st.stop()
+                # Simplified styled link with target="_top" for same-window redirect
+                st.markdown(f"""
+                    <a href="{url}" target="_top" style="
+                        background-color: #2e51a2;
+                        color: white !important;
+                        padding: 12px 20px;
+                        text-align: center;
+                        text-decoration: none;
+                        display: block;
+                        border-radius: 4px;
+                        font-weight: bold;
+                        font-size: 16px;
+                        margin-bottom: 10px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                        🔐 Login with MyAnimeList
+                    </a>
+                """, unsafe_allow_html=True)
                 
-                st.caption("This will redirect you to MyAnimeList for authorization.")
+                st.caption("This will redirect your current tab to MyAnimeList for authorization.")
 
         elif method == "NLP / Mood Search":
             vibe = st.text_area(
