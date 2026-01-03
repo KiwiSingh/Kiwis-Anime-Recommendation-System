@@ -288,7 +288,7 @@ def compute_nlp_similarity(user_query: str, anime_list: List[Dict]) -> List[Dict
     # Detect search types
     is_yuri_search = any(term in query_lower for term in ['yuri', 'girls love', 'shoujo ai', 'lesbian', 'girls doing cute girls', 'girl love'])
     is_music_search = any(term in query_lower for term in ['band', 'music', 'idol', 'song', 'concert', 'instrument']) and 'cute girls doing cute' not in query_lower
-    is_cgdct_search = any(term in query_lower for term in ['cute girls doing cute things', 'cgdct', 'girls doing cute'])
+    is_cgdct_search = any(term in query_lower for term in ['cute girls doing cute things', 'cgdct', 'girls doing cute']) and 'girls doing cute girls' not in query_lower
     
     # Sequel detection patterns
     sequel_indicators = [
