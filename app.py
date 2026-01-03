@@ -1043,8 +1043,14 @@ def main():
                     st.session_state.provider_display_name = "Manual"
                     st.success("Ready to generate recommendations!")
 
-        else:
-            user = st.text_input(f"{method} Username")
+        else: # This block handles Anilist and Kitsu
+            user = None
+            if method == "Anilist":
+                user = st.text_input(f"{method} Username")
+            elif method == "Kitsu":
+                user = st.text_input("👤 Enter Kitsu Username (Slug)", placeholder="e.g. kuro_neko")
+                st.caption("Your username is the one found in your Kitsu profile URL.")
+
             if user and st.button("📥 Load"):
                 with st.spinner(f"Loading {method} data..."):
                     try:
@@ -1064,12 +1070,16 @@ def main():
                                 st.success(f"Loaded {len(st.session_state.current_list)} anime!")
                             else:
                                 st.error("User not found or no anime list!")
-                        
-                        else:
+                        elif method == "Kitsu":
+                            # Robust user lookup: try slug first, then fallback to name
                             u_resp = requests.get(f"{KITSU_REST_URL}/users?filter[slug]={user}")
+                            if not (u_resp.status_code == 200 and u_resp.json().get('data')):
+                                u_resp = requests.get(f"{KITSU_REST_URL}/users?filter[name]={user}")
+                            
                             if u_resp.status_code == 200 and u_resp.json().get('data'):
                                 u_id = u_resp.json()['data'][0]['id']
-                                url = f"{KITSU_REST_URL}/library-entries?filter[user_id]={u_id}&filter[kind]=anime&include=anime,anime.categories&page[limit]=100"
+                                # Filter for completed entries and sort by most recent
+                                url = f"{KITSU_REST_URL}/library-entries?filter[user_id]={u_id}&filter[kind]=anime&filter[status]=completed&include=anime,anime.categories&page[limit]=100&sort=-updated_at"
                                 resp = requests.get(url).json()
                                 inc = {f"{i['type']}_{i['id']}": i for i in resp.get('included', [])}
                                 st.session_state.current_list = []
