@@ -14,7 +14,6 @@ import secrets
 import re
 from collections import Counter
 import logging
-import streamlit.components.v1 as components # type: ignore
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +35,8 @@ def init_session_state():
         'provider_display_name': "",
         'nlp_vibe': "",
         'mal_authenticated': False,
-        'selected_provider': None
+        'selected_provider': None,
+        'oauth_handled': False
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -55,27 +55,6 @@ ANILIST_URL = "https://graphql.anilist.co"
 DEFAULT_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 }
-
-# Handle OAuth callback from popup - use JavaScript to redirect parent
-if 'code' in st.query_params and 'state' in st.query_params:
-    code = st.query_params['code']
-    state = st.query_params.get('state', '')
-    
-    # Always use JavaScript to handle popup redirect
-    components.html(f"""
-    <script>
-    // If this is a popup, redirect parent and close
-    if (window.opener && window.opener !== window) {{
-        const parentUrl = window.location.origin + window.location.pathname + '?code={code}&state={state}';
-        try {{
-            window.opener.location.href = parentUrl;
-        }} catch(e) {{
-            console.error('Cannot access parent:', e);
-        }}
-        setTimeout(() => window.close(), 500);
-    }}
-    </script>
-    """, height=0)
 
 # --- SPECIAL ANIME COLLECTIONS ---
 ICONIC_COLLECTIONS = {
@@ -120,6 +99,69 @@ ICONIC_COLLECTIONS = {
         'keywords': ['tank', 'tanks', 'panzer', 'sensha', 'military vehicle']
     }
 }
+
+# --- OAUTH HANDLING ---
+def handle_mal_callback():
+    """Processes the MAL token exchange"""
+    query_params = st.query_params.to_dict()
+    if 'code' in query_params and not st.session_state.mal_authenticated:
+        auth_code = query_params['code']
+        code_verifier = query_params.get('state')
+        
+        try:
+            token_data = {
+                'client_id': MAL_CLIENT_ID,
+                'client_secret': MAL_CLIENT_SECRET,
+                'code': auth_code,
+                'code_verifier': code_verifier,
+                'grant_type': 'authorization_code',
+                'redirect_uri': REDIRECT_URI
+            }
+            resp = requests.post(
+                "https://myanimelist.net/v1/oauth2/token",
+                data=token_data,
+                headers=DEFAULT_HEADERS,
+                timeout=10,
+                verify=True
+            )
+            if resp.status_code == 200:
+                st.session_state.mal_authenticated = True
+                st.session_state.oauth_session = OAuth2Session(MAL_CLIENT_ID, token=resp.json())
+                st.query_params.clear()
+                st.success("✅ Successfully authenticated with MyAnimeList!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                logger.error(f"Token exchange failed: {resp.status_code} - {resp.text}")
+                st.error(f"❌ Auth Failed: {resp.status_code}")
+                st.session_state.oauth_handled = False
+        except requests.exceptions.Timeout:
+            logger.error("Token request timeout")
+            st.error("❌ Connection timeout. Please try again.")
+            st.session_state.oauth_handled = False
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error: {str(e)}")
+            st.error("❌ Connection error. Please check your internet connection.")
+            st.session_state.oauth_handled = False
+        except Exception as e:
+            logger.error(f"Unexpected error in token exchange: {str(e)}")
+            st.error(f"❌ Error: {str(e)}")
+            st.session_state.oauth_handled = False
+
+# Handle OAuth callback - simplified approach without popup
+query_params = st.query_params.to_dict()
+
+if 'code' in query_params and 'state' in query_params and not st.session_state.oauth_handled:
+    st.session_state.oauth_handled = True
+    with st.spinner("🔄 Authenticating with MyAnimeList..."):
+        handle_mal_callback()
+    st.stop()
+
+# Initialize provider selection
+if 'code' in query_params:
+    st.session_state.selected_provider = "MyAnimeList"
+elif st.session_state.selected_provider is None:
+    st.session_state.selected_provider = "Anilist"
 
 # --- UTILITY FUNCTIONS ---
 def safe_jikan_call(func, *args, max_retries: int = 3, **kwargs):
@@ -240,7 +282,6 @@ def extract_base_title(title: str) -> str:
     """Extract the base title without sequel indicators"""
     title_lower = title.lower()
     
-    # Remove common sequel indicators
     sequel_markers = [
         ' 2nd season', ' 3rd season', ' 4th season', ' 5th season',
         ' season 2', ' season 3', ' season 4', ' season 5',
@@ -258,10 +299,7 @@ def extract_base_title(title: str) -> str:
     for marker in sequel_markers:
         base = base.replace(marker, '')
     
-    # Remove trailing numbers
     base = re.sub(r'\s+\d+$', '', base)
-    
-    # Remove trailing symbols
     base = base.rstrip('!♪△▲')
     
     return base.strip()
@@ -556,57 +594,6 @@ def compute_nlp_similarity(user_query: str, anime_list: List[Dict]) -> List[Dict
         title_boost = ""
         
         for term in rare_terms:
-            if term in ['tank', 'tanks', 'panzer', 'sensha']:
-                if term in synopsis and not any(fp in synopsis for fp in ['thinking', 'tanking', 'thankful']):
-                    synopsis_boost += f" {term} {term} {term} {term} {term} {term} {term} {term} {term} {term}"
-                if term in title and not any(fp in title for fp in ['thinking', 'tanking']):
-                    title_boost += " ".join([term] * 15)
-            else:
-                if term in synopsis:
-                    synopsis_boost += f" {term} {term} {term} {term} {term}"
-                if term in title:
-                    title_boost += f" {term} {term} {term} {term} {term} {term} {term} {term}"
-        
-        genre_boost = ""
-        for term in rare_terms:
-            if term in genre_str:
-                genre_boost += f" {term} {term} {term} {term}"
-        
-        doc = f"{doc_title} {title_boost} {doc_genres} {genre_boost} {doc_themes} {synopsis_boost}"
-        documents.append(doc)
-        valid_anime.append(a)
-        seen_base_titles[base_title + '_doc'] = doc
-    
-    if filtered_count > 0:
-        reasons_summary = Counter([r.split(': ')[1] if ': ' in r else 'other' for r in filter_reasons])
-        reasons_str = ', '.join([f"{count} {reason}" for reason, count in reasons_summary.most_common(5)])
-        
-        if needs_harem_detection or is_yuri_search or is_music_search or is_cgdct_search:
-            st.caption(f"🚫 Filtered out {filtered_count} anime ({reasons_str})")
-            with st.expander("🔍 See what was filtered and why"):
-                for reason in filter_reasons[:30]:
-                    st.text(reason)
-        else:
-            st.caption(f"🚫 Filtered out {filtered_count} anime ({reasons_str})")
-            if list(expanded_negatives):
-                st.caption(f"Also excluding: {', '.join(expanded_negatives)}")
-            
-            if 'missing' in reasons_str:
-                with st.expander("🔍 See what was filtered and why (first 20)"):
-                    for reason in filter_reasons[:20]:
-                        st.text(reason)
-    
-    if not documents:
-        return []
-    
-    # Clean query
-    clean_query = query_lower
-    for pattern in negation_patterns:
-        clean_query = clean_query.replace(pattern, ' ')
-    for neg in expanded_negatives:
-        clean_query = clean_query.replace(neg, '')
-    
-    for term in rare_terms:
         clean_query += f" {term} {term} {term}"
     
     documents.append(clean_query)
@@ -659,58 +646,6 @@ def compute_nlp_similarity(user_query: str, anime_list: List[Dict]) -> List[Dict
             anime['vibe_score'] = 0
 
     return sorted(valid_anime, key=lambda x: x.get('vibe_score', 0), reverse=True)
-
-# --- OAUTH HANDLING ---
-def handle_mal_callback():
-    """Processes the MAL token exchange"""
-    query_params = st.query_params.to_dict()
-    if 'code' in query_params and not st.session_state.mal_authenticated:
-        auth_code = query_params['code']
-        code_verifier = query_params.get('state')
-        
-        try:
-            token_data = {
-                'client_id': MAL_CLIENT_ID,
-                'client_secret': MAL_CLIENT_SECRET,
-                'code': auth_code,
-                'code_verifier': code_verifier,
-                'grant_type': 'authorization_code',
-                'redirect_uri': REDIRECT_URI
-            }
-            # Make token request with proper headers and timeout
-            resp = requests.post(
-                "https://myanimelist.net/v1/oauth2/token",
-                data=token_data,
-                headers=DEFAULT_HEADERS,
-                timeout=10,
-                verify=True
-            )
-            if resp.status_code == 200:
-                st.session_state.mal_authenticated = True
-                st.session_state.oauth_session = OAuth2Session(MAL_CLIENT_ID, token=resp.json())
-                st.query_params.clear()
-                st.rerun()
-            else:
-                logger.error(f"Token exchange failed: {resp.status_code} - {resp.text}")
-                st.error(f"❌ Auth Failed: {resp.status_code}")
-        except requests.exceptions.Timeout:
-            logger.error("Token request timeout")
-            st.error("❌ Connection timeout. Please try again.")
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error: {str(e)}")
-            st.error("❌ Connection error. Please check your internet connection.")
-        except Exception as e:
-            logger.error(f"Unexpected error in token exchange: {str(e)}")
-            st.error(f"❌ Error: {str(e)}")
-
-# Initialize provider selection
-query_params = st.query_params.to_dict()
-if 'code' in query_params:
-    st.session_state.selected_provider = "MyAnimeList"
-elif st.session_state.selected_provider is None:
-    st.session_state.selected_provider = "Anilist"
-
-handle_mal_callback()
 
 # --- RECOMMENDATION ENGINE ---
 def run_engine(raw_list: List[Dict], provider: str, min_score: float, vibe_q: str = "") -> List[Dict]:
@@ -807,11 +742,17 @@ def run_engine(raw_list: List[Dict], provider: str, min_score: float, vibe_q: st
         ranked = compute_nlp_similarity(vibe_q, candidate_pool)
         
         if provider == "NLP":
-            results = [r for r in ranked if r.get('vibe_score', 0) > 0 and (r.get('score') or 0) >= min_score][:20]
+            # Filter out anime with no MAL score AND apply min_score threshold
+            results = [
+                r for r in ranked 
+                if r.get('vibe_score', 0) > 0 
+                and r.get('score') is not None 
+                and (r.get('score') or 0) >= min_score
+            ][:20]
             if not results:
                 st.warning("⚠️ No semantic matches found. Try different keywords or lower the minimum score.")
                 results = sorted(
-                    [r for r in candidate_pool if (r.get('score') or 0) >= min_score],
+                    [r for r in candidate_pool if r.get('score') is not None and (r.get('score') or 0) >= min_score],
                     key=lambda x: x.get('score') or 0,
                     reverse=True
                 )[:10]
@@ -996,12 +937,12 @@ def main():
                             logger.error(f"Error loading MAL data: {str(e)}")
                             st.error(f"❌ Error loading data: {str(e)}")
             else:
+                st.info("👇 Click below to authenticate with MyAnimeList")
                 v = secrets.token_urlsafe(60)
-                url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
-                components.html(f"""
-                <button onclick="window.open('{url}', 'mal_login', 'width=600,height=700')" style="background:#2e51a2;color:white;padding:12px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:16px;width:100%;">🔐 Login with MAL</button>
-                """)
-                st.caption("Click the button to authenticate with MyAnimeList in a popup window")
+                auth_url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
+                
+                st.markdown(f'<a href="{auth_url}" target="_self"><button style="background:#2e51a2;color:white;padding:12px 24px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:16px;width:100%;">🔐 Login with MAL</button></a>', unsafe_allow_html=True)
+                st.caption("You'll be redirected to MyAnimeList to authorize access")
 
         elif method == "NLP / Mood Search":
             vibe = st.text_area(
