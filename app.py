@@ -46,7 +46,7 @@ init_session_state()
 # API Constants
 MAL_CLIENT_ID = st.secrets.get("MAL_CLIENT_ID", "")
 MAL_CLIENT_SECRET = st.secrets.get("MAL_CLIENT_SECRET", "")
-REDIRECT_URI = "http://localhost:8501"
+REDIRECT_URI = "https://kiwi-anime-recs.streamlit.app/"
 KITSU_REST_URL = "https://kitsu.io/api/edge"
 ANILIST_URL = "https://graphql.anilist.co"
 
