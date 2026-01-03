@@ -56,25 +56,24 @@ DEFAULT_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 }
 
-# Handle popup callback
-if 'popup' in st.query_params:
-    if 'code' in st.query_params:
-        code = st.query_params['code']
-        state = st.query_params.get('state', '')
-        components.html(f"""
-        <script>
-        if (window.opener) {{
-            window.opener.location.href = window.location.origin + window.location.pathname + '?code={code}&state={state}';
-            window.close();
-        }} else {{
-            window.location.href = window.location.origin + window.location.pathname;
-        }}
-        </script>
-        """)
-        st.stop()
-    else:
-        st.error("Authorization failed")
-        st.stop()
+# Handle OAuth callback from popup
+if 'code' in st.query_params and 'state' in st.query_params:
+    code = st.query_params['code']
+    state = st.query_params.get('state', '')
+    
+    # If opened in a popup, redirect parent and close
+    components.html(f"""
+    <script>
+    if (window.opener) {{
+        // Redirect parent window to the code callback URL
+        const parentUrl = window.location.origin + window.location.pathname + '?code={code}&state={state}';
+        window.opener.location.href = parentUrl;
+        // Close this popup window
+        window.close();
+    }}
+    </script>
+    """)
+    st.stop()
 
 # --- SPECIAL ANIME COLLECTIONS ---
 ICONIC_COLLECTIONS = {
@@ -998,8 +997,9 @@ def main():
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
                 components.html(f"""
-                <button onclick="window.open('{url}', 'mal_login', 'width=600,height=600')" style="background:#2e51a2;color:white;padding:12px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Login with MAL</button>
+                <button onclick="window.open('{url}', 'mal_login', 'width=600,height=700')" style="background:#2e51a2;color:white;padding:12px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:16px;width:100%;">🔐 Login with MAL</button>
                 """)
+                st.caption("Click the button to authenticate with MyAnimeList in a popup window")
 
         elif method == "NLP / Mood Search":
             vibe = st.text_area(
