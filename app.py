@@ -14,6 +14,7 @@ import secrets
 import re
 from collections import Counter
 import logging
+import streamlit.components.v1 as components
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,9 +47,29 @@ init_session_state()
 # API Constants
 MAL_CLIENT_ID = st.secrets.get("MAL_CLIENT_ID", "")
 MAL_CLIENT_SECRET = st.secrets.get("MAL_CLIENT_SECRET", "")
-REDIRECT_URI = "https://kiwi-anime-recs.streamlit.app/"
+REDIRECT_URI = "https://kiwi-anime-recs.streamlit.app/?popup=true"
 KITSU_REST_URL = "https://kitsu.io/api/edge"
 ANILIST_URL = "https://graphql.anilist.co"
+
+# Handle popup callback
+if 'popup' in st.query_params:
+    if 'code' in st.query_params:
+        code = st.query_params['code']
+        state = st.query_params.get('state', '')
+        components.html(f"""
+        <script>
+        if (window.opener) {{
+            window.opener.location.href = window.location.origin + window.location.pathname + '?code={code}&state={state}';
+            window.close();
+        }} else {{
+            window.location.href = window.location.origin + window.location.pathname;
+        }}
+        </script>
+        """)
+        st.stop()
+    else:
+        st.error("Authorization failed")
+        st.stop()
 
 # --- SPECIAL ANIME COLLECTIONS ---
 ICONIC_COLLECTIONS = {
@@ -945,10 +966,9 @@ def main():
             else:
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
-                st.markdown(
-                    f'<a href="{url}" target="_self"><button style="background:#2e51a2;color:white;padding:12px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Login with MAL</button></a>',
-                    unsafe_allow_html=True
-                )
+                components.html(f"""
+                <button onclick="window.open('{url}', 'mal_login', 'width=600,height=600')" style="background:#2e51a2;color:white;padding:12px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Login with MAL</button>
+                """)
 
         elif method == "NLP / Mood Search":
             vibe = st.text_area(
