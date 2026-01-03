@@ -56,24 +56,26 @@ DEFAULT_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 }
 
-# Handle OAuth callback from popup
+# Handle OAuth callback from popup - use JavaScript to redirect parent
 if 'code' in st.query_params and 'state' in st.query_params:
     code = st.query_params['code']
     state = st.query_params.get('state', '')
     
-    # If opened in a popup, redirect parent and close
+    # Always use JavaScript to handle popup redirect
     components.html(f"""
     <script>
-    if (window.opener) {{
-        // Redirect parent window to the code callback URL
+    // If this is a popup, redirect parent and close
+    if (window.opener && window.opener !== window) {{
         const parentUrl = window.location.origin + window.location.pathname + '?code={code}&state={state}';
-        window.opener.location.href = parentUrl;
-        // Close this popup window
-        window.close();
+        try {{
+            window.opener.location.href = parentUrl;
+        }} catch(e) {{
+            console.error('Cannot access parent:', e);
+        }}
+        setTimeout(() => window.close(), 500);
     }}
     </script>
-    """)
-    st.stop()
+    """, height=0)
 
 # --- SPECIAL ANIME COLLECTIONS ---
 ICONIC_COLLECTIONS = {
