@@ -1,0 +1,13 @@
+requests
+streamlit
+pandas
+numpy
+requests
+requests-oauthlib
+lru_cache
+aiohttp
+jikanpy-v4
+streamlit-searchbox
+plotly
+vadersentiment
+scikit-learn
