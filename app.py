@@ -36,7 +36,8 @@ def init_session_state():
         'provider_display_name': "",
         'nlp_vibe': "",
         'mal_authenticated': False,
-        'selected_provider': None
+        'selected_provider': None,
+        'trigger_mal_auth': False
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -979,14 +980,21 @@ def main():
             else:
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
-                st.markdown(f"""
-                    <a href="{url}" target="_top" style="text-decoration:none;">
-                        <div style="background:#2e51a2;color:white;padding:12px;border-radius:4px;text-align:center;font-weight:bold;font-size:16px;width:100%;">
-                            🔐 Login with MyAnimeList
-                        </div>
-                    </a>
-                """, unsafe_allow_html=True)
-                st.caption("Click to authenticate with MyAnimeList (this will redirect the current page)")
+                
+                if st.button("🔐 Login with MyAnimeList", type="primary", use_container_width=True):
+                    st.session_state.trigger_mal_auth = True
+                    st.rerun()
+
+                if st.session_state.get('trigger_mal_auth'):
+                    st.session_state.trigger_mal_auth = False
+                    components.html(f"""
+                        <script>
+                            window.top.location.href = "{url}";
+                        </script>
+                    """, height=0)
+                    st.stop()
+                
+                st.caption("This will redirect you to MyAnimeList for authorization.")
 
         elif method == "NLP / Mood Search":
             vibe = st.text_area(
