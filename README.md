@@ -32,7 +32,7 @@ To enable MyAnimeList authentication and personalized features:
 
 1. Go to [MyAnimeList Developer Portal](https://myanimelist.net/apiconfig)
 2. Create a new application
-3. Set the redirect URI to: `http://localhost:8501`
+3. Set the redirect URI to: `http://localhost:8501/?popup=true`
 4. Copy your Client ID and Client Secret
 
 ### Environment Variables
