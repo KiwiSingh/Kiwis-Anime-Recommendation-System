@@ -56,32 +56,7 @@ DEFAULT_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 }
 
-# Handle OAuth callback from popup - use JavaScript to redirect parent
-if 'code' in st.query_params and 'state' in st.query_params and 'auth_done' not in st.query_params:
-    code = st.query_params['code']
-    state = st.query_params.get('state', '')
-    
-    # Always use JavaScript to handle popup redirect
-    # We use the hardcoded REDIRECT_URI because window.location.origin inside an iframe is restricted
-    components.html(f"""
-    <script>
-    const parentUrl = "{REDIRECT_URI}?code={code}&state={state}&auth_done=true";
-    if (window.opener && window.opener !== window) {{
-        // If this is a popup, redirect parent and close
-        try {{
-            window.opener.location.href = parentUrl;
-            window.close();
-        }} catch(e) {{
-            console.error('Cannot access parent:', e);
-            window.top.location.href = parentUrl;
-        }}
-    }} else {{
-        // If not in a popup, redirect the top-level window
-        window.top.location.href = parentUrl;
-    }}
-    </script>
-    """, height=0)
-    st.stop()
+# Handle OAuth callback Landing - we skip any popup logic and let handle_mal_callback process it
 
 # --- SPECIAL ANIME COLLECTIONS ---
 ICONIC_COLLECTIONS = {
@@ -1004,10 +979,14 @@ def main():
             else:
                 v = secrets.token_urlsafe(60)
                 url = f"https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id={MAL_CLIENT_ID}&redirect_uri={REDIRECT_URI}&code_challenge={v}&code_challenge_method=plain&state={v}"
-                components.html(f"""
-                <button onclick="window.open('{url}', 'mal_login', 'width=600,height=700')" style="background:#2e51a2;color:white;padding:12px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:16px;width:100%;">🔐 Login with MAL</button>
-                """)
-                st.caption("Click the button to authenticate with MyAnimeList in a popup window")
+                st.markdown(f"""
+                    <a href="{url}" target="_self" style="text-decoration:none;">
+                        <div style="background:#2e51a2;color:white;padding:12px;border-radius:4px;text-align:center;font-weight:bold;font-size:16px;width:100%;">
+                            🔐 Login with MyAnimeList
+                        </div>
+                    </a>
+                """, unsafe_allow_html=True)
+                st.caption("Click to authenticate with MyAnimeList (this will redirect the current page)")
 
         elif method == "NLP / Mood Search":
             vibe = st.text_area(
