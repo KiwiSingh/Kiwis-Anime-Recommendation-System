@@ -76,15 +76,15 @@ ICONIC_COLLECTIONS = {
         'mal_ids': [28, 777, 355, 6920, 3457, 11111],
         'keywords': ['vampire', 'blood', 'dracula', 'immortal']
     },
-    'cgdct': {
-        'search_terms': ['k-on', 'yuru camp', 'non non biyori', 'school', 'girls', 'comedy', 'slice of life'],
-        'mal_ids': [17549, 5680, 34798, 23587, 28999, 30831, 38656, 20047, 10165, 15051],
-        'keywords': ['cute girls doing cute things', 'cgdct', 'moe', 'iyashikei', 'girls doing cute']
-    },
     'yuri': {
         'search_terms': ['yuri', 'girls love', 'shoujo ai', 'bloom into you', 'citrus', 'lesbian'],
         'mal_ids': [37786, 34382, 50739, 39790, 20047, 6164, 32681, 21939, 44774],
         'keywords': ['yuri', 'girls love', 'shoujo ai', 'lesbian', 'girls doing cute girls', 'girl love']
+    },
+    'cgdct': {
+        'search_terms': ['k-on', 'yuru camp', 'non non biyori', 'school', 'girls', 'comedy', 'slice of life'],
+        'mal_ids': [17549, 5680, 34798, 23587, 28999, 30831, 38656, 20047, 10165, 15051],
+        'keywords': ['cute girls doing cute things', 'cgdct', 'moe', 'iyashikei', 'girls doing cute']
     },
     'dogs': {
         'search_terms': ['dog', 'dogs', 'puppy', 'inukai', 'chainsaw man'],
@@ -846,7 +846,7 @@ def perform_nlp_search(vibe: str, min_score: float):
     
     is_music_search = any(term in vibe_lower for term in ['band', 'music', 'idol', 'song']) and 'cute girls' not in vibe_lower
     is_yuri_search = any(term in vibe_lower for term in ['yuri', 'girls love', 'shoujo ai', 'lesbian', 'girls doing cute girls', 'girl love'])
-    is_cgdct_search = any(term in vibe_lower for term in ['cute girls doing cute things', 'cgdct', 'girls doing cute'])
+    is_cgdct_search = any(term in vibe_lower for term in ['cute girls doing cute things', 'cgdct', 'girls doing cute']) and 'girls doing cute girls' not in vibe_lower
     
     if collection:
         progress_text.text(f"🎯 Detected {collection.upper()} - fetching iconic titles...")
